@@ -15,14 +15,14 @@ fn main() -> Result<()> {
 
     // Create variables to store params
     let mut pattern: String = String::new();
-    let mut file_path: Option<std::path::PathBuf> = None;
+    let mut file_paths: Vec<std::path::PathBuf> = Vec::new();
     let mut params: String = String::new();
 
     // Loop through the user inputs
     while let Some(arg) = args.next() {
         match &arg[..] {
             // Implemented options for command
-            // TODO verbose, 
+            // TODO verbose,
             "-h" | "--help" => params += "help ",
             "-r" | "--recursive" => params += "recursive ",
             "-i" | "--ignore-case" => params += "insensitive ",
@@ -32,18 +32,16 @@ fn main() -> Result<()> {
                 // Error handling
                 if arg.starts_with("-") {
                     println!("Unknown argument '{}'", arg);
-                } 
-
+                }
                 // Set the pattern if it doesnt exist
                 else if pattern == "" {
                     pattern = arg;
-                } 
-                
-                // Set directory if it exists
-                else if file_path.is_none() {
+                }
+                // Add to paths if it is valid
+                else {
                     let path_arg = std::path::PathBuf::from(arg);
                     if path_arg.exists() {
-                        file_path = Some(path_arg);
+                        file_paths.push(path_arg);
                     } else {
                         println!("'{}' no such file or directory", path_arg.display());
                     }
@@ -65,41 +63,46 @@ fn main() -> Result<()> {
     }
 
     // Set file path to this directory if no file path is provided
-    let file_path = file_path.get_or_insert(std::path::PathBuf::from("."));
+    if file_paths.is_empty() {
+        file_paths.push(std::path::PathBuf::from("."));
+    }
 
-    // Store up the arguements for the command
-    let args = Cli {
-        pattern: pattern,
-        path: file_path.to_owned(),
-        params: params,
-    };
+    // Loop through all inputed files
+    for arg_path in file_paths {
+        // Store up the arguements for the command
+        let args = Cli {
+            pattern: pattern.to_owned(),
+            path: arg_path,
+            params: params.to_owned(),
+        };
 
-    // Recursive search if requested
-    if args.params.contains("recursive") {
-        recursive_search(&args).unwrap();
-    } 
-    else {
-        // Search the file for the pattern if it exists
-        if args.path.is_file() {
-            match search_file(&args) {
-                Err(e) => println!("{}", e),
-                _ => (),
+        // Recursive search if requested
+        if args.params.contains("recursive") {
+            recursive_search(&args).unwrap();
+        } else {
+            // Search the file for the pattern if it exists
+            if args.path.is_file() {
+                match search_file(&args) {
+                    Err(e) => println!("{}", e),
+                    _ => (),
+                }
+            }
+            // Error due to it being a directory
+            else if args.path.is_dir() {
+                println!("'{}' is a directory", args.path.display());
+            }
+            // Error due to the path not existing
+            else {
+                println!("no such file {}", args.path.display());
             }
         }
-        // Error due to it being a directory 
-        else if args.path.is_dir() {
-            println!("'{}' is a directory", args.path.display());
-        }
-        // Error due to the path not existing 
-        else {
-            println!("no such file {}", args.path.display());
-        }
     }
+
     // Success!
     Ok(())
 }
 
-/// Function to search a file for all instances of a pattern and highlight them 
+/// Function to search a file for all instances of a pattern and highlight them
 fn search_file(args: &Cli) -> Result<()> {
     // Read the file
     let contents = std::fs::read_to_string(&args.path)
@@ -130,7 +133,7 @@ fn search_file(args: &Cli) -> Result<()> {
                 );
             }
         }
-        // Search case sensitively 
+        // Search case sensitively
         else {
             if line.contains(&args.pattern) {
                 // Print file path
@@ -153,8 +156,8 @@ fn search_file(args: &Cli) -> Result<()> {
 
 /// Print the help text (grop -h)
 fn print_help() {
-    println!("Usage: grop [PATTERN] [FILE] [PARAMS]");
-    println!("Search for PATTERN in each FILE");
+    println!("Usage: grop [PATTERN] [FILES..] [PARAMS..]");
+    println!("Search for PATTERN in each file in FILES");
     println!("Example: grop \"Hello World\" src/main.rs -i\n");
     println!("-h, --help\t\t Show the help screen");
     println!("-r, --recursive\t\tRecursively search FILE as a directory");
@@ -164,7 +167,7 @@ fn print_help() {
 
 /// Recursively search directories for instances
 fn recursive_search(args: &Cli) -> Result<()> {
-    // Search the file 
+    // Search the file
     if args.path.is_file() {
         match search_file(args) {
             // Err(e) => eprintln!("{}", e),
